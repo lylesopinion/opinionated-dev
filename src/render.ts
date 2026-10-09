@@ -26,6 +26,19 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/** Escape an author's user-facing fields for safe HTML interpolation. */
+function escapeAuthor(author: Author): {
+  name: string;
+  bio: string;
+  link: string;
+} {
+  return {
+    name: escapeHtml(author.displayName),
+    bio: escapeHtml(author.bio),
+    link: escapeHtml(author.link),
+  };
+}
+
 /**
  * The load-bearing authorship contract: return every post whose `author` is not
  * a key of the `authors` registry, each as `"<postId> -> \"<author>\""`. An
@@ -38,9 +51,7 @@ export function unresolvedAuthors(
   authors: Record<string, Author>,
 ): string[] {
   return posts
-    .filter(
-      (post) => !Object.prototype.hasOwnProperty.call(authors, post.author),
-    )
+    .filter((post) => !Object.hasOwn(authors, post.author))
     .map((post) => `${post.id} -> "${post.author}"`);
 }
 
@@ -112,9 +123,7 @@ ${main}
 
 /** A byline for a post card or post page — display name, bio, link. */
 export function renderByline(author: Author): string {
-  const name = escapeHtml(author.displayName);
-  const bio = escapeHtml(author.bio);
-  const link = escapeHtml(author.link);
+  const { name, bio, link } = escapeAuthor(author);
   return `<p class="byline"><a class="author-name" href="${link}">${name}</a><span class="author-bio">${bio}</span></p>`;
 }
 
@@ -170,13 +179,8 @@ ${entries}
   });
 }
 
-function renderAuthorEntry(
-  author: Author,
-  posts: Post[],
-): string {
-  const name = escapeHtml(author.displayName);
-  const bio = escapeHtml(author.bio);
-  const link = escapeHtml(author.link);
+function renderAuthorEntry(author: Author, posts: Post[]): string {
+  const { name, bio, link } = escapeAuthor(author);
   const authored = newestFirst(posts.filter((p) => p.author === author.id));
   const items = authored
     .map(
