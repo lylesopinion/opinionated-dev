@@ -1,0 +1,7 @@
+# Non-build inputs. Never part of the served site.
+node_modules/
+dist/
+_site/
+.git/
+.xen-factory/
+.opencode/
