@@ -1,0 +1,230 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --line: rgba(255, 255, 255, 0.1);
+  --text: #eceef2;
+  --muted: #9aa3b2;
+  --accent: #ff6b4a;
+  --radius: 12px;
+  --maxw: 760px;
+  --font-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-head: "Iowan Old Style", Georgia, "Times New Roman", serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.65;
+  font-size: 17px;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-head);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.container {
+  width: 100%;
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.site-header {
+  border-bottom: 1px solid var(--line);
+  padding: 18px 0;
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.brand {
+  font-family: var(--font-head);
+  font-size: 20px;
+  color: var(--text);
+}
+
+.brand .dim {
+  color: var(--muted);
+}
+
+.site-nav {
+  display: flex;
+  gap: 18px;
+}
+
+.nav-link {
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.nav-link:hover {
+  color: var(--text);
+}
+
+main {
+  min-height: 60vh;
+}
+
+.page-hero {
+  padding: 56px 0 24px;
+}
+
+.page-hero h1 {
+  font-size: clamp(2rem, 5vw, 2.8rem);
+  margin-bottom: 8px;
+}
+
+.lead {
+  color: var(--muted);
+  max-width: 60ch;
+}
+
+.section {
+  padding: 24px 0 64px;
+}
+
+.grid {
+  display: grid;
+  gap: 20px;
+}
+
+.card,
+.author-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 22px;
+}
+
+.card h3 {
+  font-size: 1.35rem;
+  margin-bottom: 6px;
+}
+
+.post-title {
+  color: var(--text);
+}
+
+.post-date {
+  display: block;
+  color: var(--muted);
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.post-summary {
+  color: var(--muted);
+}
+
+.byline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.author-name {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.author-bio {
+  color: var(--muted);
+}
+
+.author-card h2 {
+  font-size: 1.5rem;
+  margin-bottom: 8px;
+}
+
+.author-posts {
+  list-style: none;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.author-posts li {
+  margin: 4px 0;
+}
+
+.prose {
+  max-width: 68ch;
+}
+
+.prose p {
+  margin: 0 0 1.1em;
+}
+
+.prose h2 {
+  margin: 1.8em 0 0.6em;
+  font-size: 1.5rem;
+}
+
+.prose code {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 0.9em;
+}
+
+.placeholder-note {
+  background: rgba(255, 107, 74, 0.12);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin: 0 0 1.4em;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  padding: 28px 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.footer-note {
+  margin: 4px 0;
+}
+
+.footer-note a {
+  color: var(--muted);
+}
