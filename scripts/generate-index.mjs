@@ -12,10 +12,11 @@ let posts;
 let authors;
 let renderIndexHtml;
 let renderAuthorIndexHtml;
+let unresolvedAuthors;
 try {
   ({ posts } = await import(join(root, "dist", "posts.js")));
   ({ authors } = await import(join(root, "dist", "authors.js")));
-  ({ renderIndexHtml, renderAuthorIndexHtml } = await import(
+  ({ renderIndexHtml, renderAuthorIndexHtml, unresolvedAuthors } = await import(
     join(root, "dist", "render.js")
   ));
 } catch (err) {
@@ -27,12 +28,12 @@ try {
 }
 
 // Invariant: every post's author must resolve to a registry key. Fail loudly.
-const unresolved = posts.filter((p) => !authors[p.author]);
+const unresolved = unresolvedAuthors(posts, authors);
 if (unresolved.length > 0) {
   console.error(
-    `generate-index: ${unresolved.length} post(s) reference an unknown author: ${unresolved
-      .map((p) => `${p.id} -> "${p.author}"`)
-      .join(", ")}`,
+    `generate-index: ${unresolved.length} post(s) reference an unknown author: ${unresolved.join(
+      ", ",
+    )}`,
   );
   process.exit(1);
 }

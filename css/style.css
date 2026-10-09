@@ -228,3 +228,17 @@ main {
 .footer-note a {
   color: var(--muted);
 }
+
+.cta {
+  margin-top: 24px;
+  padding: 16px 20px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  color: var(--muted);
+}
+
+.cta a {
+  color: var(--accent);
+  font-weight: 600;
+}
