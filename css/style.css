@@ -214,6 +214,39 @@ main {
   font-size: 15px;
 }
 
+.draft-notice {
+  background: rgba(255, 107, 74, 0.12);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  margin: 0 0 1.4em;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.draft-badge {
+  display: inline-block;
+  background: rgba(255, 107, 74, 0.12);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 2px 10px;
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.card-draft {
+  border-color: var(--accent);
+}
+
+.draft-marker {
+  color: var(--muted);
+  font-style: italic;
+}
+
 .site-footer {
   border-top: 1px solid var(--line);
   padding: 28px 0;

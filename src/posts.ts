@@ -8,7 +8,7 @@
 export interface Post {
   /** Zero-padded ordinal, e.g. "001" — part of the URL/filename. */
   id: string;
-  /** Post page filename under blog/, e.g. "001-placeholder.html". */
+  /** Post page filename under blog/, e.g. "001-why-this-blog-exists.html". */
   slug: string;
   /** Display title. */
   title: string;
@@ -18,16 +18,22 @@ export interface Post {
   summary?: string;
   /** Author id — a key of the `authors` registry. */
   author: string;
+  /**
+   * When true, the post is a draft pending approval and is rendered with a
+   * visible draft treatment (badge/notice). Machine-detectable via `draft: true`.
+   */
+  draft?: boolean;
 }
 
 export const posts: Post[] = [
   {
     id: "001",
-    slug: "001-placeholder.html",
-    title: "Placeholder: this blog exists",
+    slug: "001-why-this-blog-exists.html",
+    title: "Why this blog exists",
     date: "2026-10-09",
     summary:
-      "A placeholder first post so the pipeline is exercisable end-to-end before real editorial copy lands.",
+      "Why opinionated.dev is separate from the business blog, what to expect (strong opinions, loosely guarded), and how to write back.",
     author: "lyle",
+    draft: true,
   },
 ];

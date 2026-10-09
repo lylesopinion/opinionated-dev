@@ -130,13 +130,18 @@ export function renderByline(author: Author): string {
 function renderCard(post: Post, authors: Record<string, Author>): string {
   const href = escapeHtml(post.slug);
   const title = escapeHtml(post.title);
+  const draft = post.draft === true;
+  const cardClass = draft ? "card card-draft" : "card";
   const summary = post.summary
     ? `\n            <p class="post-summary">${escapeHtml(post.summary)}</p>`
     : "";
+  const draftBadge = draft
+    ? `\n            <p class="draft-badge">Draft — pending approval</p>`
+    : "";
   const author = authors[post.author];
   const byline = author ? `\n            ${renderByline(author)}` : "";
-  return `          <article class="card">
-            <h3><a class="post-title" href="${href}">${title}</a></h3>
+  return `          <article class="${cardClass}">
+            <h3><a class="post-title" href="${href}">${title}</a></h3>${draftBadge}
             <time class="post-date" datetime="${escapeHtml(post.date)}">${escapeHtml(
     formatDate(post.date),
   )}</time>${summary}${byline}
@@ -183,12 +188,14 @@ function renderAuthorEntry(author: Author, posts: Post[]): string {
   const { name, bio, link } = escapeAuthor(author);
   const authored = newestFirst(posts.filter((p) => p.author === author.id));
   const items = authored
-    .map(
-      (post) =>
-        `              <li><a href="blog/${escapeHtml(post.slug)}">${escapeHtml(
-          post.title,
-        )}</a></li>`,
-    )
+    .map((post) => {
+      const draft = post.draft === true
+        ? ` <span class="draft-marker">(draft)</span>`
+        : "";
+      return `              <li><a href="blog/${escapeHtml(post.slug)}">${escapeHtml(
+        post.title,
+      )}</a>${draft}</li>`;
+    })
     .join("\n");
   const postList = authored.length
     ? `\n            <ul class="author-posts">\n${items}\n            </ul>`
