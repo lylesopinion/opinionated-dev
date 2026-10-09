@@ -37,7 +37,7 @@ opinionated-dev/
 ├── authors.html                   # generated + committed (do not hand-edit)
 ├── blog/
 │   ├── index.html                 # generated + committed (do not hand-edit)
-│   └── 001-placeholder.html       # hand-authored post (placeholder)
+│   └── 001-why-this-blog-exists.html   # hand-authored post (draft)
 ├── css/style.css                  # minimal self-contained stylesheet
 ├── src/
 │   ├── authors.ts                 # single source of truth: Author registry
@@ -77,9 +77,11 @@ not hand-edit them; change the manifest/registry and rebuild.
 See [`POST_TEMPLATE.md`](POST_TEMPLATE.md) for the exact fields and
 [`CONTRIBUTING.md`](CONTRIBUTING.md) for the guest-post pull-request flow.
 
-> **Placeholder content.** `blog/001-placeholder.html` is scaffolding, marked in
-> source with a `PLACEHOLDER CONTENT` comment. It exists to exercise the
-> pipeline and will be replaced once real editorial copy lands.
+> **Draft content.** `blog/001-why-this-blog-exists.html` is the first real
+> post, marked in source as a draft pending Lyle's approval (a `DRAFT` comment,
+> a visible notice, and a `noindex` meta tag). The `draft: true` flag in
+> `src/posts.ts` drives a visible draft badge on the generated index and authors
+> pages. Clear the flag and the draft markers when Lyle approves.
 
 ## Serve
 
