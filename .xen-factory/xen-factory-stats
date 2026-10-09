@@ -1,0 +1,215 @@
+#!/usr/bin/env bash
+# xen-factory-stats — aggregate stats from .xen-factory/stats.jsonl
+#
+# Usage:
+#   xen-factory-stats               # default: summary
+#   xen-factory-stats summary       # overview: passes, success rate, totals
+#   xen-factory-stats agents        # per-agent breakdown
+#   xen-factory-stats issues        # per-issue breakdown
+#   xen-factory-stats timeline [N]  # last N run/pick/unblock events (default 50)
+#   xen-factory-stats blocked       # current state:blocked issues + recent sweeps
+#   xen-factory-stats chores        # recurring chore cadence
+#   xen-factory-stats usage         # synthetic.new account quotas
+#   xen-factory-stats raw           # cat the raw JSONL (pipe to jq)
+#   xen-factory-stats json <query>  # arbitrary jq filter against stats.jsonl
+#
+# Env:
+#   XEN_DIR         repo root (default: two levels up from this script)
+#   XEN_CONFIG      override config.json path
+#   XEN_STATS_LOG   override stats.jsonl path
+#   XEN_AUTH        override opencode auth.json path
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="${XEN_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+CONFIG="${XEN_CONFIG:-$REPO_DIR/.xen-factory/config.json}"
+STATS="${XEN_STATS_LOG:-$REPO_DIR/.xen-factory/stats.jsonl}"
+cfg() { [[ -f "$CONFIG" ]] && jq -r "$1" "$CONFIG" 2>/dev/null || echo "${2:-}"; }
+
+[[ -f "$STATS" ]] || { echo "no stats file at $STATS" >&2
+  echo "hint: the orchestrator writes it on each pass" >&2; exit 1; }
+
+cmd="${1:-summary}"; shift || true
+
+fmt_dur() {
+  local s=$1
+  if (( s < 60 )); then printf '%ds' "$s"
+  elif (( s < 3600 )); then printf '%.1fmin' "$(awk "BEGIN{print $s/60}")"
+  else printf '%.1fh' "$(awk "BEGIN{print $s/3600}")"; fi
+}
+
+case "$cmd" in
+  summary)
+    jq -sr '
+      def fsecs(s): if s < 60 then "\(s)s"
+                    elif s < 3600 then "\(s/60 | . * 10 | floor / 10)min"
+                    else "\(s/3600 | . * 10 | floor / 10)h" end;
+      {
+        pass_starts:([.[]|select(.event=="pass_start")]|length),
+        pass_ends:([.[]|select(.event=="pass_end")]|length),
+        skips:([.[]|select(.event=="skip")]|length),
+        max_iters:([.[]|select(.event=="max_iters_hit")]|length),
+        sweep_backlog:([.[]|select(.event=="sweep_backlog")]|length),
+        unblocks:([.[]|select(.event=="unblock")]|length),
+        run_starts:([.[]|select(.event=="run_start")]|length),
+        run_ends:([.[]|select(.event=="run_end")]|length),
+        runs_done:([.[]|select(.event=="run_end" and .outcome=="done")]|length),
+        runs_failed:([.[]|select(.event=="run_end" and .outcome=="failed")]|length),
+        total_run_s:([.[]|select(.event=="run_end")|.duration_s]|add // 0),
+        first_event:(.[0].ts // "n/a"), last_event:(.[-1].ts // "n/a")
+      }
+      | "=== PIPELINE SUMMARY ===",
+        "Window:        \(.first_event)  →  \(.last_event)", "",
+        "Passes:        \(.pass_starts) started, \(.pass_ends) ended",
+        "Cron skips:    \(.skips) (lock held by another instance)",
+        "MAX_ITERS hit: \(.max_iters) times", "",
+        "Sweeps:",
+        "  sweep_backlog auto-labels: \(.sweep_backlog)",
+        "  unblocks:                  \(.unblocks)", "",
+        "Agent runs:    \(.run_starts) started, \(.run_ends) ended",
+        "  done:        \(.runs_done)",
+        "  failed:      \(.runs_failed)",
+        (if (.runs_done + .runs_failed) > 0 then
+          "  success rate: \((.runs_done / (.runs_done + .runs_failed) * 100 | . * 10 | floor / 10))%" else empty end),
+        "  total agent time: \(fsecs(.total_run_s))"
+    ' "$STATS"
+    ;;
+
+  agents)
+    jq -sr '
+      def pad(s; n): s + " " * ((n - (s|length) + 1) | if . < 1 then 1 else . end);
+      [.[]|select(.event=="run_end")] | group_by(.agent)
+      | map({agent:.[0].agent, starts:length,
+             done:([.[]|select(.outcome=="done")]|length),
+             failed:([.[]|select(.outcome=="failed")]|length),
+             total_s:([.[]|.duration_s]|add // 0),
+             avg_s:(if length>0 then ([.[]|.duration_s]|add)/length else 0 end),
+             min_s:([.[]|.duration_s]|min // 0), max_s:([.[]|.duration_s]|max // 0)})
+      | sort_by(-.total_s)
+      | "=== PER-AGENT ===", "",
+        "agent              starts  done  fail    total     avg     min     max",
+        (.[] | pad(.agent;18) + pad(.starts|tostring;7) + pad(.done|tostring;6) +
+          pad(.failed|tostring;5) +
+          pad((.total_s/60*10|floor/10)|tostring+"min";8) +
+          pad((.avg_s/60*10|floor/10)|tostring+"min";8) +
+          pad((.min_s/60*10|floor/10)|tostring+"min";8) +
+          ((.max_s/60*10|floor/10)|tostring+"min"))
+    ' "$STATS"
+    ;;
+
+  issues)
+    jq -sr '
+      def pad(s; n): s + " " * ((n - (s|length) + 1) | if . < 1 then 1 else . end);
+      [.[]|select(.event=="run_end")] | group_by(.issue)
+      | map({issue:.[0].issue, starts:length,
+             done:([.[]|select(.outcome=="done")]|length),
+             failed:([.[]|select(.outcome=="failed")]|length),
+             total_s:([.[]|.duration_s]|add // 0), max_s:([.[]|.duration_s]|max // 0),
+             agents:([.[]|.agent]|unique|join(","))})
+      | sort_by(.issue)
+      | "=== PER-ISSUE ===", "",
+        "issue  starts  done  fail    total     max     agents",
+        (.[] | pad("#"+(.issue|tostring);7) + pad(.starts|tostring;7) + pad(.done|tostring;6) +
+          pad(.failed|tostring;5) +
+          pad((.total_s/60*10|floor/10)|tostring+"min";8) +
+          pad((.max_s/60*10|floor/10)|tostring+"min";8) + .agents)
+    ' "$STATS"
+    ;;
+
+  timeline)
+    n="${1:-50}"
+    jq -sr '
+      [.[]|select(.event=="run_start" or .event=="run_end" or .event=="unblock" or .event=="pick")]
+      | map(.ts + "  " + (
+          if .event=="pick" then "PICK  " + .agent + " #" + (.issue|tostring) + " [" + .state + "]"
+          elif .event=="run_start" then "START " + .agent + " #" + (.issue|tostring)
+          elif .event=="run_end" then
+            (if .outcome=="done" then "DONE  " else "FAIL  " end) + .agent + " #" + (.issue|tostring) +
+            "  (" + (.duration_s|tostring) + "s" + (if .rc then " rc=" + (.rc|tostring) else "" end) + ")"
+          elif .event=="unblock" then
+            "UNBLK #" + (.issue|tostring) + " ← #" + (.blocker|tostring) + " → " + .restored_state
+          else .event end))
+      | .[]
+    ' "$STATS" | tail -"$n"
+    ;;
+
+  blocked)
+    echo "=== CURRENT state:blocked ISSUES ==="
+    gh issue list --label "state:blocked" --state open \
+      --json number,title --jq '.[] | "#\(.number) — \(.title)"' 2>/dev/null || echo "(gh query failed)"
+    echo; echo "=== RECENT sweep_blocked EVENTS ==="
+    jq -sr '
+      [.[]|select(.event=="sweep_blocked_scan" or .event=="unblock" or .event=="sweep_blocked_malformed")]
+      | .[-20:]
+      | .[] | .ts + "  " + .event + "  issue=#" + (.issue|tostring) +
+        (if .blocker then " blocker=#" + (.blocker|tostring) + " (" + .blocker_state + ")" else "" end) +
+        (if .restored_state then " → " + .restored_state else "" end) +
+        (if .reason then " reason=" + .reason else "" end)
+    ' "$STATS" 2>/dev/null || echo "(no blocked events in stats.jsonl)"
+    ;;
+
+  chores)
+    cname="$(cfg '.chore.name' 'code-maintenance')"
+    open_c="$(gh issue list --state open --label chore --json number,title \
+      --jq '[.[]|select(.title|startswith("chore: '"$cname"'"))]|length' 2>/dev/null)" || open_c=0
+    open_c="${open_c:-0}"
+    jq -sr --arg c "$cname" --arg oc "$open_c" '
+      def lastfire(t):[.[]|select(.event=="chore_tick" and .chore==t and .action=="create")]|last|.last_fire_date // "never"|if .==""then "never" else . end;
+      def lastissue(t):[.[]|select(.event=="chore_create" and .chore==t)]|last|.issue // null;
+      def ncreates(t):[.[]|select(.event=="chore_create" and .chore==t)]|length;
+      def nskips(t):[.[]|select(.event=="chore_skip" and .chore==t)]|length;
+      def skipreasons(t):[.[]|select(.event=="chore_skip" and .chore==t)|.reason]|group_by(.)|map("\(.[0])=\(length)")|join(", ");
+      "=== RECURRING CHORES ===", "",
+      "type:           \($c)",
+      "last fire:      \(lastfire($c))  issue=\(if lastissue($c) then "#\(lastissue($c))" else "n/a" end)",
+      "open chores:    \($oc)",
+      "created:        \(ncreates($c))",
+      "skipped:        \(nskips($c))  (\(skipreasons($c)))"
+    ' "$STATS"
+    ;;
+
+  usage)
+    AUTH="${XEN_AUTH:-$(cfg '.tiering.auth_file' "$HOME/.local/share/opencode/auth.json")}"; AUTH="${AUTH/#\~/$HOME}"
+    KEYPATH="$(cfg '.tiering.auth_key_path' '.synthetic.key')"
+    [[ -f "$AUTH" ]] || { echo "no auth file at $AUTH" >&2
+      echo "hint: opencode stores the synthetic key in ~/.local/share/opencode/auth.json" >&2; exit 1; }
+    key="$(jq -r "$KEYPATH // empty" "$AUTH" 2>/dev/null)"
+    [[ -n "$key" ]] || { echo "no synthetic key in $AUTH (expected $KEYPATH)" >&2; exit 1; }
+    echo "=== SYNTHETIC.NEW USAGE ==="
+    curl -s "$(cfg '.tiering.quota_url' 'https://api.synthetic.new/v2/quotas')" -H "Authorization: Bearer $key" \
+      | jq -r '
+        def num(s): s | if type=="string" then ltrimstr("$")|tonumber else . end;
+        "subscription    \(.subscription.requests)/\(.subscription.limit) requests   (renews \(.subscription.renewsAt[0:19])Z)",
+        "search.hourly   \(.search.hourly.requests)/\(.search.hourly.limit) requests    (renews \(.search.hourly.renewsAt[0:19])Z)",
+        "weekly tokens   \(num(.weeklyTokenLimit.remainingCredits))/\(num(.weeklyTokenLimit.maxCredits)) USD   (\(.weeklyTokenLimit.percentRemaining * 100 | floor / 100)% left, regen +\(num(.weeklyTokenLimit.nextRegenCredits)) at \(.weeklyTokenLimit.nextRegenAt[0:19])Z)",
+        "rolling 5h      \(.rollingFiveHourLimit.remaining)/\(.rollingFiveHourLimit.max)   limited=\(.rollingFiveHourLimit.limited)   (next tick \(.rollingFiveHourLimit.nextTickAt[0:19])Z)"
+      '
+    ;;
+
+  raw)  cat "$STATS" ;;
+  json) q="${1:-.}"; jq "$q" "$STATS" ;;
+
+  *)
+    cat <<EOF
+Usage: xen-factory-stats <subcommand>
+
+Subcommands:
+  summary    Overview: passes, success rate, totals
+  agents     Per-agent breakdown (starts/done/fail/avg/min/max)
+  issues     Per-issue breakdown (starts/done/fail/total/max/agents)
+  timeline   Chronological run events (last 50 by default)
+  blocked    Current state:blocked issues + recent sweep events
+  chores     Recurring chore cadence (last fire, open count, create/skip counts)
+  usage      Synthetic.new account quotas (reads key from opencode auth.json)
+  raw        Cat the raw JSONL
+  json <q>   Run arbitrary jq filter against stats.jsonl
+
+Env:
+  XEN_DIR         repo root (default: two levels up from this script)
+  XEN_CONFIG      override config.json path
+  XEN_STATS_LOG   override stats.jsonl path
+  XEN_AUTH        override opencode auth.json path
+EOF
+    exit 1
+    ;;
+esac

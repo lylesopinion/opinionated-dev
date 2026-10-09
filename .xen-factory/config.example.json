@@ -1,0 +1,36 @@
+{
+  "$comment": "Copy to .xen-factory/config.json and edit. Every value here is per-repo.",
+
+  "repo": "OWNER/REPO",
+  "human": "your-github-login",
+  "base_branch": "main",
+  "branch_prefix": "factory",
+
+  "model": "synthetic/syn:large:text",
+  "vision_model": "synthetic/syn:large:vision",
+
+  "tiering": {
+    "enabled": false,
+    "quota_url": "https://api.synthetic.new/v2/quotas",
+    "auth_file": "~/.local/share/opencode/auth.json",
+    "auth_key_path": ".synthetic.key",
+    "large":  { "text": "synthetic/syn:large:text",  "vision": "synthetic/syn:large:vision" },
+    "small":  { "text": "synthetic/syn:small:text",  "vision": "synthetic/syn:small:vision" },
+    "local":  { "text": "ollama/hf.co/unsloth/Qwen3.6-35B-A3B-GGUF:UD-Q6_K", "vision": "ollama/hf.co/unsloth/gemma-4-12b-it-GGUF:Q6_K" }
+  },
+
+  "checks": {
+    "lint": "npm run lint",
+    "typecheck": "npm run typecheck",
+    "test": "npm test"
+  },
+
+  "chore": {
+    "enabled": true,
+    "name": "code-maintenance",
+    "template": ".xen-factory/templates/code-maintenance.md"
+  },
+
+  "issue_timeout": 3600,
+  "max_iters": 40
+}

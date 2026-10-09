@@ -1,0 +1,8 @@
+# Per-repo runtime artifacts — never commit these.
+config.json
+*.log
+*.lock
+stats.jsonl
+chore-state.json
+pr-body-*.md
+worktrees/
