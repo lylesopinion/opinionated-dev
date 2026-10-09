@@ -3,7 +3,10 @@
 Thanks for writing here. `opinionated.dev` is a static blog with a deliberately
 small toolchain, and contributions are welcome by pull request.
 
-## The guest-post flow
+## Writing for this blog
+
+The guest-post flow is a pull request. Anyone is welcome to pitch a post; open
+an issue first if you want to check fit before writing.
 
 1. **Fork and branch.** Fork this repository and create a branch off `main`
    (e.g. `post/my-first-post`).
@@ -17,6 +20,16 @@ small toolchain, and contributions are welcome by pull request.
    commit the regenerated `blog/index.html` and `authors.html` along with your
    post. They are generated; never hand-edit them.
 5. **Open the PR.** A maintainer reviews it.
+
+## The `author` contract
+
+A post's `author` field in `src/posts.ts` is **not free text**: it must be a key
+of the `authors` registry in `src/authors.ts`. This is load-bearing. On every
+build, `generate-index` checks each post against the registry and **fails loudly
+with a non-zero exit** when a post references an unknown author. You can verify
+it yourself: point a post at a missing id, run `npm run build`, and watch it
+refuse to generate the site. This is what makes anonymous posts structurally
+impossible — there is no path to a published page without an attributed author.
 
 ## What review means here
 

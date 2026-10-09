@@ -9,6 +9,26 @@ explicit whitelist of files.
 The pattern mirrors the sibling repos `xeno-web` and `banplasticbottles`, with
 one deliberate divergence: multi-author is built in from the start.
 
+## What this is
+
+`opinionated.dev` is **Lyle Shemer's personal blog**: essays and opinions by
+Lyle and invited guests. The topics are open — tech, systems, causes, music,
+whatever he has opinions about. **The name is the license**: the site is where
+he says what he thinks, in his own voice.
+
+That voice is deliberately **first-person, with strong opinions loosely
+guarded** — opinionated, but not dogmatic; willing to be argued with. It is
+meant to read as a person thinking out loud, not a brand issuing positions. It
+is deliberately **not** the calmer business voice at
+[xenomorph.dev/blog](https://xenomorph.dev/blog), which stays measured and
+corporate; this site is where the person behind it gets to be a person.
+
+Guests write here too, always by pull request. See
+[`CONTRIBUTING.md`](CONTRIBUTING.md) for the guest-post flow and the authorship
+rules — in short: **Lyle is the default author, guests are always attributed,
+and nothing is anonymous.** Every post resolves to an entry in `src/authors.ts`,
+and the build fails loudly if it does not.
+
 ## Structure
 
 ```

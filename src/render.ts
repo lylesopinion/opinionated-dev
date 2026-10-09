@@ -26,6 +26,24 @@ export function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/**
+ * The load-bearing authorship contract: return every post whose `author` is not
+ * a key of the `authors` registry, each as `"<postId> -> \"<author>\""`. An
+ * empty result means every post is attributed; a non-empty one means anonymous
+ * or misattributed posts exist. The build calls this and fails loudly on a
+ * non-empty result, so a missing author can never reach a published page.
+ */
+export function unresolvedAuthors(
+  posts: Post[],
+  authors: Record<string, Author>,
+): string[] {
+  return posts
+    .filter(
+      (post) => !Object.prototype.hasOwnProperty.call(authors, post.author),
+    )
+    .map((post) => `${post.id} -> "${post.author}"`);
+}
+
 /** Render an ISO date (YYYY-MM-DD) as a human-readable, unambiguous label. */
 function formatDate(iso: string): string {
   const [year, month, day] = iso.split("-");
@@ -132,7 +150,7 @@ export function renderIndexHtml(
   const main = `    <section class="page-hero">
       <div class="container">
         <h1>Blog</h1>
-        <p class="lead">Notes on building systems that improve themselves.</p>
+        <p class="lead">Essays and opinions, in the first person — strong views, loosely guarded, and nothing like the calmer business blog.</p>
       </div>
     </section>
 
@@ -203,6 +221,7 @@ export function renderAuthorIndexHtml(
         <div class="grid">
 ${entries}
         </div>
+        <p class="cta"><a href="CONTRIBUTING.md">Write for this blog</a> — guests are always attributed, by pull request.</p>
       </div>
     </section>`;
 
