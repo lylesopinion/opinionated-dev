@@ -204,16 +204,6 @@ main {
   font-size: 0.9em;
 }
 
-.placeholder-note {
-  background: rgba(255, 107, 74, 0.12);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  padding: 12px 16px;
-  margin: 0 0 1.4em;
-  color: var(--text);
-  font-size: 15px;
-}
-
 .draft-notice {
   background: rgba(255, 107, 74, 0.12);
   border: 1px solid var(--accent);

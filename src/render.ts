@@ -121,6 +121,16 @@ ${main}
 `;
 }
 
+/** The hero band shared by the blog and authors indexes. */
+function pageHero(heading: string, lead: string): string {
+  return `    <section class="page-hero">
+      <div class="container">
+        <h1>${heading}</h1>
+        <p class="lead">${lead}</p>
+      </div>
+    </section>`;
+}
+
 /** A byline for a post card or post page — display name, bio, link. */
 export function renderByline(author: Author): string {
   const { name, bio, link } = escapeAuthor(author);
@@ -161,12 +171,10 @@ export function renderIndexHtml(
     .map((post) => renderCard(post, authors))
     .join("\n");
 
-  const main = `    <section class="page-hero">
-      <div class="container">
-        <h1>Blog</h1>
-        <p class="lead">Essays and opinions, in the first person — strong views, loosely guarded, and nothing like the calmer business blog.</p>
-      </div>
-    </section>
+  const main = `${pageHero(
+    "Blog",
+    "Essays and opinions, in the first person — strong views, loosely guarded, and nothing like the calmer business blog.",
+  )}
 
     <section class="section">
       <div class="container">
@@ -220,12 +228,10 @@ export function renderAuthorIndexHtml(
     .map((author) => renderAuthorEntry(author, posts))
     .join("\n");
 
-  const main = `    <section class="page-hero">
-      <div class="container">
-        <h1>Authors</h1>
-        <p class="lead">Everyone who writes here. Guests are always attributed.</p>
-      </div>
-    </section>
+  const main = `${pageHero(
+    "Authors",
+    "Everyone who writes here. Guests are always attributed.",
+  )}
 
     <section class="section">
       <div class="container">
