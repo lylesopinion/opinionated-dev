@@ -92,7 +92,7 @@ docker run --rm -p 8080:80 opinionated-dev
 
 The Dockerfile is a two-stage build: `node:20-alpine` compiles and generates,
 `nginx:alpine` serves only the whitelisted static output (`index.html`,
-`authors.html`, `css/`, `js/`, `blog/`). `src/`, `scripts/`, `node_modules/`,
+`authors.html`, `css/`, `blog/`). `src/`, `scripts/`, `node_modules/`,
 `dist/`, `.git/`, `.opencode/`, and `.xen-factory/` are never served. The
 staging script enforces the same boundary:
 

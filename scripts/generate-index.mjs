@@ -8,24 +8,23 @@ import { dirname, join } from "node:path";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-let posts;
-let authors;
-let renderIndexHtml;
-let renderAuthorIndexHtml;
-let unresolvedAuthors;
-try {
-  ({ posts } = await import(join(root, "dist", "posts.js")));
-  ({ authors } = await import(join(root, "dist", "authors.js")));
-  ({ renderIndexHtml, renderAuthorIndexHtml, unresolvedAuthors } = await import(
-    join(root, "dist", "render.js")
-  ));
-} catch (err) {
-  console.error(
-    "generate-index: could not load dist/*.js — run `tsc` first (npm run build does this).",
-  );
-  console.error(err);
-  process.exit(1);
+/** Import one compiled module from dist/, failing loudly if the build is stale. */
+async function importDist(name) {
+  try {
+    return await import(join(root, "dist", name));
+  } catch (err) {
+    console.error(
+      "generate-index: could not load dist/*.js — run `tsc` first (npm run build does this).",
+    );
+    console.error(err);
+    process.exit(1);
+  }
 }
+
+const { posts } = await importDist("posts.js");
+const { authors } = await importDist("authors.js");
+const { renderIndexHtml, renderAuthorIndexHtml, unresolvedAuthors } =
+  await importDist("render.js");
 
 // Invariant: every post's author must resolve to a registry key. Fail loudly.
 const unresolved = unresolvedAuthors(posts, authors);
