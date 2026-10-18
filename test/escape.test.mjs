@@ -38,7 +38,12 @@ test("renderIndexHtml escapes manifest values (title/summary/date)", () => {
   const html = renderIndexHtml(evilPosts, evilAuthors);
 
   assert.ok(!html.includes("<script>"), "raw <script> must not appear");
-  assert.ok(!html.includes(`a" onmouseover`), "raw attribute break must not appear");
+  // The slug's raw attribute-break (`a"onmouseover=`) must never survive into
+  // the markup — the escaped form is `a&quot;onmouseover=`.
+  assert.ok(
+    !html.includes(`a"onmouseover`),
+    "raw attribute break must not appear",
+  );
   assert.ok(html.includes("&lt;script&gt;"), "title must be escaped");
   assert.ok(html.includes("&amp;"), "ampersand must be escaped");
   assert.ok(html.includes("&quot;"), "double quote must be escaped");

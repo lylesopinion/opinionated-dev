@@ -131,8 +131,8 @@ function pageHero(heading: string, lead: string): string {
     </section>`;
 }
 
-/** A byline for a post card or post page — display name, bio, link. */
-export function renderByline(author: Author): string {
+/** A byline for a post card — display name, bio, link. */
+function renderByline(author: Author): string {
   const { name, bio, link } = escapeAuthor(author);
   return `<p class="byline"><a class="author-name" href="${link}">${name}</a><span class="author-bio">${bio}</span></p>`;
 }
