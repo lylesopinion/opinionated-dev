@@ -41,27 +41,31 @@ ISSUE_TIMEOUT="${ISSUE_TIMEOUT:-$(cfg '.issue_timeout // 3600')}"
 MAX_ITERS="${MAX_ITERS:-$(cfg '.max_iters // 40')}"
 OC_BIN="${XEN_OPENCODE:-$(command -v opencode || echo "$HOME/.opencode/bin/opencode")}"
 
+# gh seam for tests: XEN_GH substitutes a stub (mirrors the XEN_OPENCODE seam
+# above). The `command` in the unset branch is load-bearing: a bare
+# "${XEN_GH:-gh}" would re-resolve to THIS function when XEN_GH is unset —
+# infinite recursion. `command gh` skips function lookup, giving an exact
+# pass-through. All gh calls here run in the main shell (pipeline while-loops
+# are subshells of it), so no export -f is needed.
+gh() { if [[ -n "${XEN_GH:-}" ]]; then "$XEN_GH" "$@"; else command gh "$@"; fi; }
+
 # Detect the opencode CLI generation so this works on both.
 #   V1: `run --dir <repo> --dangerously-skip-permissions`
 #   V2: cwd defines the directory; auto-approve is `--auto`
-OC_AUTO_FLAG="--auto"
-if ! "$OC_BIN" run --help 2>&1 | grep -q -- '--auto'; then
-  OC_AUTO_FLAG="--dangerously-skip-permissions"
-fi
-# Legacy global flag retained only for agents' own shell-outs to the vision agent
-# (older skills interpolate $XEN_OC_DIR_FLAG). Dispatch builds its own --dir per
-# worktree, because the cwd is no longer the main repo.
+# One probe, two decisions — both flags key off the same `run --help` output.
+OC_RUN_HELP="$("$OC_BIN" run --help 2>&1 || true)"
+case "$OC_RUN_HELP" in
+  *--auto*) OC_AUTO_FLAG="--auto" ;;
+  *) OC_AUTO_FLAG="--dangerously-skip-permissions" ;;
+esac
+# On V1 the cwd no longer tells opencode where the repo is. Dispatch builds its own
+# --dir per worktree (see run_agent); this legacy global flag only covers ancillary
+# shell-outs (the vision agent), which are correct pointing at the main repo.
 OC_HAS_DIR_FLAG=false
-if "$OC_BIN" run --help 2>&1 | grep -q -- '--dir'; then
-  OC_HAS_DIR_FLAG=true
-fi
-export OC_HAS_DIR_FLAG
-# Ancillary shell-outs (the vision agent) still receive an explicit dir on V1; the
-# main repo is correct for them and keeps older skills working unchanged. Dispatch
-# itself builds its own --dir per worktree (see run_agent).
+case "$OC_RUN_HELP" in *--dir*) OC_HAS_DIR_FLAG=true ;; esac
 XEN_OC_DIR_FLAG=""
 if [[ "$OC_HAS_DIR_FLAG" == true ]]; then XEN_OC_DIR_FLAG="--dir $REPO_DIR"; fi
-# Exposed to agents so their skill shell-outs (e.g. the vision agent) match this CLI.
+# Exposed to agents so their skill shell-outs match this CLI generation.
 export XEN_OC_BIN="$OC_BIN"
 export XEN_OC_AUTO_FLAG="$OC_AUTO_FLAG"
 export XEN_OC_DIR_FLAG="$XEN_OC_DIR_FLAG"
@@ -88,6 +92,7 @@ unset OPENCODE OPENCODE_PID OPENCODE_PROCESS_ROLE OPENCODE_RUN_ID \
       OPENCODE_SERVER_PASSWORD OPENCODE_SERVER_USERNAME 2>/dev/null || true
 
 log() { echo "$(date -Is) $*" >> "$LOG"; }
+now_epoch() { date -u +%s; }
 
 # gh relies on the repo being the cwd. Cron runs us from $HOME, where every gh
 # call fails and gets swallowed as "(non-fatal)" — sweeps silently no-op
@@ -99,7 +104,7 @@ cd "$REPO_DIR"
 have_labels="$(gh label list --limit 100 --json name --jq '.[].name' 2>/dev/null || true)"
 for lbl in state:backlog state:needs-requirements state:needs-design \
            state:needs-dev-work state:needs-review state:needs-testing \
-           state:needs-more-info state:blocked chore \
+           state:needs-more-info state:blocked state:watch chore \
            priority:low priority:medium priority:high; do
   if ! grep -qxF "$lbl" <<<"$have_labels"; then
     if gh label create "$lbl" --color C5DEF5 --description "xen-factory workflow label" >/dev/null 2>&1; then
@@ -109,7 +114,6 @@ for lbl in state:backlog state:needs-requirements state:needs-design \
     fi
   fi
 done
-now_epoch() { date -u +%s; }
 
 # --- Stats (structured JSONL event stream) -----------------------------------
 # One JSON object per line. String fields are escaped; everything else is bare.
@@ -328,17 +332,16 @@ sweep_blocked() {
     fi
     blocker="$(printf '%s\n' "$body" | grep -oE 'Blocked by #[0-9]+' | grep -oE '[0-9]+' | head -1)"
     prev="$(printf '%s\n' "$body" | grep -oE 'Was: state:[a-z-]+' | grep -oE 'state:[a-z-]+' | head -1)"
+    [[ -z "$prev" ]] && prev="state:backlog"
     if [[ -z "$blocker" ]]; then
       log "[sweep-blocked] issue #$n '## Blocked' has no 'Blocked by #N'; auto-clearing"
       emit_event event=sweep_blocked_malformed issue=$n reason="no_blocker_id"
-      [[ -z "$prev" ]] && prev="state:backlog"
       if gh issue edit "$n" --remove-label "state:blocked" --add-label "$prev" >/dev/null 2>&1; then
         gh issue comment "$n" --body "Auto-cleared \`state:blocked\`: the latest \`## Blocked\` comment names no blocker (\`Blocked by #N\` missing). Restoring \`$prev\`." >/dev/null 2>&1
         log "[sweep-blocked] issue #$n invalid block auto-cleared; returning to $prev"
       fi
       continue
     fi
-    [[ -z "$prev" ]] && prev="state:backlog"
     bstate="$(gh issue view "$blocker" --json state --jq '.state' 2>/dev/null)" || true
     emit_event event=sweep_blocked_scan issue=$n blocker=$blocker blocker_state=$bstate
     if [[ "$bstate" == "CLOSED" ]]; then
@@ -357,18 +360,32 @@ sweep_blocked() {
 CHORE_STATE="$STATE_DIR/chore-state.json"
 _jq_state() { local tmp; tmp="$(mktemp)"; jq "$@" "$CHORE_STATE" > "$tmp" 2>/dev/null && mv "$tmp" "$CHORE_STATE" || rm -f "$tmp"; }
 
+# A chore tick that should not (or cannot) create an issue: log why, emit the skip
+# events, and stamp last_tick. Every value is passed in so this stays a pure helper;
+# it keeps the four non-firing paths in sweep_chores identical.
+#   args: name now reason last_fire_date worked_since message
+chore_skip_tick() {
+  local name="$1" now="$2" reason="$3" lfd="$4" worked="$5" msg="$6"
+  log "[chore] $msg"
+  emit_event event=chore_tick chore="$name" last_fire_date="$lfd" worked_since="$worked" action=skip
+  emit_event event=chore_skip chore="$name" reason="$reason"
+  _jq_state --arg t "$name" --arg n "$now" '.[$t].last_tick = $n'
+}
+
 sweep_chores() {
   [[ "$(cfg '.chore.enabled // false')" == "true" ]] || return 0
-  local name template title_prefix display today now lfd since worked_since open_count body recent new_issue
+  local name template today now lfd since closed worked_since open_count body recent new_issue url
   name="$(cfg '.chore.name // "code-maintenance"')"
   template="$(cfg '.chore.template // ".xen-factory/templates/code-maintenance.md"')"
   [[ "$template" != /* ]] && template="$REPO_DIR/$template"
-  display="$name"; title_prefix="chore: $name"
   today="$(date -u +%Y-%m-%d)"; now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
   gh label create chore --color FEF2C0 --description "Recurring maintenance chore" >/dev/null 2>&1 || true
 
-  [[ -f "$CHORE_STATE" ]] || jq -n '{ "code-maintenance": {"last_tick":null,"last_fire_date":null,"last_fire_issue":null} }' > "$CHORE_STATE" 2>/dev/null || true
+  # Seed the state file keyed by the configured chore name (jq assignment creates
+  # missing keys later, so this bootstrap is the only place a default is written).
+  [[ -f "$CHORE_STATE" ]] || jq -n --arg t "$name" \
+    '{($t): {"last_tick":null,"last_fire_date":null,"last_fire_issue":null}}' > "$CHORE_STATE" 2>/dev/null || true
   if ! jq -e . "$CHORE_STATE" >/dev/null 2>&1; then
     log "[chore] chore-state.json is malformed; aborting chore sweep (non-fatal)"; return 1
   fi
@@ -377,48 +394,45 @@ sweep_chores() {
   since="${lfd:-2000-01-01}"
 
   if [[ -n "$lfd" && "$today" == "$lfd" ]]; then
-    log "[chore] $name already fired today ($lfd); skipping"
-    emit_event event=chore_tick chore="$name" last_fire_date="$lfd" worked_since=0 action=skip
-    emit_event event=chore_skip chore="$name" reason=already_fired_today
-    _jq_state --arg t "$name" --arg n "$now" '.[$t].last_tick = $n'; return 0
+    chore_skip_tick "$name" "$now" already_fired_today "$lfd" 0 "$name already fired today ($lfd); skipping"
+    return 0
   fi
 
-  worked_since="$(gh issue list --state closed --search "closed:>=$since" --json number,labels \
-    --jq '[.[] | select((.labels | map(.name) | any(. == "chore")) | not)] | length' 2>/dev/null)" || worked_since=0
+  # Non-chore issues closed since the last fire — both the fire gate and the
+  # context list read this set, so fetch it once.
+  closed="$(gh issue list --state closed --search "closed:>=$since" --json number,labels \
+    --jq '[.[] | select((.labels | map(.name) | any(. == "chore")) | not) | .number] | sort' 2>/dev/null)" || closed="[]"
+  [[ -n "$closed" ]] || closed="[]"
+  worked_since="$(jq 'length' <<<"$closed" 2>/dev/null)" || worked_since=0
   worked_since="${worked_since:-0}"
 
   open_count="$(gh issue list --state open --label chore --json number,title \
-    --jq '[.[] | select(.title | startswith("'"$title_prefix"'"))] | length' 2>/dev/null)" || open_count=0
+    --jq '[.[] | select(.title | startswith("chore: '"$name"'"))] | length' 2>/dev/null)" || open_count=0
   open_count="${open_count:-0}"
   if (( open_count > 0 )); then
-    log "[chore] $name already has an open chore; skipping (open_exists)"
-    emit_event event=chore_tick chore="$name" last_fire_date="${lfd:-}" worked_since="$worked_since" action=skip
-    emit_event event=chore_skip chore="$name" reason=open_exists
-    _jq_state --arg t "$name" --arg n "$now" '.[$t].last_tick = $n'; return 0
+    chore_skip_tick "$name" "$now" open_exists "${lfd:-}" "$worked_since" \
+      "$name already has an open chore; skipping (open_exists)"
+    return 0
   fi
   if (( worked_since == 0 )); then
-    log "[chore] $name no non-chore work since $since; skipping (no_work_since_last)"
-    emit_event event=chore_tick chore="$name" last_fire_date="${lfd:-}" worked_since=0 action=skip
-    emit_event event=chore_skip chore="$name" reason=no_work_since_last
-    _jq_state --arg t "$name" --arg n "$now" '.[$t].last_tick = $n'; return 0
+    chore_skip_tick "$name" "$now" no_work_since_last "${lfd:-}" 0 \
+      "$name no non-chore work since $since; skipping (no_work_since_last)"
+    return 0
   fi
 
   body="$(cat "$template" 2>/dev/null)" || body="(template missing: $template)"
-  recent="$(gh issue list --state closed --search "closed:>=$since" --json number,labels \
-    --jq '[.[] | select((.labels | map(.name) | any(. == "chore")) | not) | .number] | sort | .[] | "- #" + tostring' 2>/dev/null)" || recent=""
+  recent="$(jq -r '.[] | "- #" + tostring' <<<"$closed" 2>/dev/null)" || recent=""
   recent="${recent:-(none)}"
   body="${body//\{\{recently_closed\}\}/$recent}"
 
   # gh issue create prints the issue URL — there is no --json flag for create.
-  local url
-  url="$(gh issue create --title "chore: $display ($today)" --body "$body" \
+  url="$(gh issue create --title "chore: $name ($today)" --body "$body" \
     --label chore --label priority:low --label state:needs-dev-work 2>/dev/null)" || url=""
   new_issue="$(printf '%s' "$url" | grep -oE '[0-9]+$')" || new_issue=""
   if [[ -z "$new_issue" ]]; then
-    log "[chore] $name failed to create chore issue (gh error); skipping"
-    emit_event event=chore_tick chore="$name" last_fire_date="${lfd:-}" worked_since="$worked_since" action=skip
-    emit_event event=chore_skip chore="$name" reason=create_failed
-    _jq_state --arg t "$name" --arg n "$now" '.[$t].last_tick = $n'; return 0
+    chore_skip_tick "$name" "$now" create_failed "${lfd:-}" "$worked_since" \
+      "$name failed to create chore issue (gh error); skipping"
+    return 0
   fi
   log "[chore] $name created chore issue #$new_issue (worked_since=$worked_since)"
   emit_event event=chore_tick chore="$name" last_fire_date="$today" worked_since="$worked_since" action=create
@@ -486,7 +500,7 @@ iter=0
 exhausted=false
 while (( iter < MAX_ITERS )); do
   iter=$((iter + 1))
-  worked=false
+  n=""
   for s in "${states[@]}"; do
     n="$(first_issue_in "$s")"
     if [[ -n "$n" ]]; then
@@ -497,15 +511,15 @@ while (( iter < MAX_ITERS )); do
       branch="$BRANCH_PREFIX/$n"
       wt="$(worktree_ensure "$n" "$branch")" || {
         log "[worktree] issue #$n not dispatched (worktree unavailable)"
+        n=""
         continue
       }
       run_agent "$a" "$n" "$wt" || true
       cleanup_closed_worktree "$n" "$branch"
-      worked=true
       break
     fi
   done
-  if [[ "$worked" == "false" ]]; then
+  if [[ -z "$n" ]]; then
     log "[done] no actionable issues (only needs-more-info or empty); exiting loop"
     break
   fi
