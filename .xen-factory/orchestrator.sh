@@ -178,6 +178,7 @@ export XEN_VISION_MODEL="$CURRENT_VISION_MODEL"
 
 # --- State -> agent mapping (right to left priority) -------------------------
 # state:needs-more-info is intentionally absent: it is human-owned.
+# state:watch is intentionally absent: QA-parked, wake condition owned in-issue.
 states=(
   state:needs-testing
   state:needs-review
