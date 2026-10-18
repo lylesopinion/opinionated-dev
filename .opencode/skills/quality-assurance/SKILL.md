@@ -26,6 +26,11 @@ Environment: `$XEN_BASE_BRANCH` (default `main`), `$XEN_BRANCH_PREFIX` (default
   summary of work (chores).
 - "Done" = issue is closed. (The orchestrator removes the worktree and prunes the
   branch after the close; you do not do this dance.)
+- **Watch park (`state:watch`):** an issue that passed but carries a still-running
+  watch-window criterion (e.g. "AC-4: watch until 2026-10-24") is parked, not closed:
+  it stays OPEN with the `state:watch` label and a comment naming the wake condition
+  (who acts, on what event/date). Never park label-less — the backlog sweep reads a
+  label-less open issue as "untriaged" and re-dispatches it (artos#118).
 
 ## Workflow
 
@@ -60,6 +65,14 @@ Environment: `$XEN_BASE_BRANCH` (default `main`), `$XEN_BRANCH_PREFIX` (default
    - Do NOT merge. Stop.
 9. **Passes path:**
    - Merge (squash, delete remote branch): `gh pr merge <PR> --squash --delete-branch`
+   - **Watch park:** if the issue has a watch-window criterion still running (e.g.
+     "AC-4: watch until 2026-10-24"), do NOT close it — park it with `state:watch`
+     (never label-less, artos#118) and post the wake condition (who acts, on what
+     event/date), then skip the two steps below:
+     ```bash
+     gh issue edit <N> --remove-label "state:needs-testing" --add-label "state:watch"
+     gh issue comment <N> --body "Merged via PR #<PR>. Passed with a watch window: <criterion>. Wake condition: <who> acts <on what event/date>. Parked state:watch until then."
+     ```
    - Close the issue:
      `gh issue close <N> --comment "Verified against PRD/TDD (or issue body). Merged via PR #<PR>. Closing."`
    - Remove any remaining `state:` label(s):
