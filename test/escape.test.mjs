@@ -70,7 +70,7 @@ test("renderAuthorIndexHtml escapes registry values", () => {
 test("every post author resolves to a registry key", () => {
   for (const post of posts) {
     assert.ok(
-      Object.prototype.hasOwnProperty.call(authors, post.author),
+      Object.hasOwn(authors, post.author),
       `post ${post.id} references unknown author "${post.author}"`,
     );
   }
