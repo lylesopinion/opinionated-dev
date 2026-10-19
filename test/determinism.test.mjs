@@ -42,3 +42,30 @@ test("index is sorted newest-first", () => {
     );
   }
 });
+
+test("an out-of-order manifest still renders newest-first", () => {
+  // The committed manifest currently holds a single post, so the check above
+  // cannot fail yet — exercise the sort itself with a synthesized manifest
+  // whose entries are listed oldest-entry-first.
+  const unordered = [
+    {
+      id: "001",
+      slug: "001-older.html",
+      title: "Older post",
+      date: "2025-01-01",
+      author: "lyle",
+    },
+    {
+      id: "002",
+      slug: "002-newer.html",
+      title: "Newer post",
+      date: "2026-10-18",
+      author: "lyle",
+    },
+  ];
+  const html = renderIndexHtml(unordered, authors);
+  assert.ok(
+    html.indexOf("Newer post") < html.indexOf("Older post"),
+    "newer post must render above the older one",
+  );
+});

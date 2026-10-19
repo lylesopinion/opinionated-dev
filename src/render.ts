@@ -62,11 +62,9 @@ function formatDate(iso: string): string {
   return `${monthName} ${Number(day)}, ${year}`;
 }
 
-/** Sort newest-first without mutating the input. */
+/** Sort newest-first without mutating the input. ISO dates sort lexically. */
 function newestFirst(posts: Post[]): Post[] {
-  return [...posts].sort((a, b) =>
-    a.date < b.date ? 1 : a.date > b.date ? -1 : 0,
-  );
+  return [...posts].sort((a, b) => b.date.localeCompare(a.date));
 }
 
 /**
@@ -131,10 +129,16 @@ function pageHero(heading: string, lead: string): string {
     </section>`;
 }
 
+/** Anchor to an author's site with their display name — shared by byline and author cards. */
+function authorLink(author: Author): string {
+  const { name, link } = escapeAuthor(author);
+  return `<a class="author-name" href="${link}">${name}</a>`;
+}
+
 /** A byline for a post card — display name, bio, link. */
 function renderByline(author: Author): string {
-  const { name, bio, link } = escapeAuthor(author);
-  return `<p class="byline"><a class="author-name" href="${link}">${name}</a><span class="author-bio">${bio}</span></p>`;
+  const { bio } = escapeAuthor(author);
+  return `<p class="byline">${authorLink(author)}<span class="author-bio">${bio}</span></p>`;
 }
 
 function renderCard(post: Post, authors: Record<string, Author>): string {
@@ -193,7 +197,7 @@ ${entries}
 }
 
 function renderAuthorEntry(author: Author, posts: Post[]): string {
-  const { name, bio, link } = escapeAuthor(author);
+  const { bio } = escapeAuthor(author);
   const authored = newestFirst(posts.filter((p) => p.author === author.id));
   const items = authored
     .map((post) => {
@@ -210,7 +214,7 @@ function renderAuthorEntry(author: Author, posts: Post[]): string {
     : "";
 
   return `          <article class="author-card">
-            <h2><a class="author-name" href="${link}">${name}</a></h2>
+            <h2>${authorLink(author)}</h2>
             <p class="author-bio">${bio}</p>${postList}
           </article>`;
 }
